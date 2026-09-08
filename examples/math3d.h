@@ -1,6 +1,8 @@
 /**
  * @file math3d.h
  * @brief Self-contained 3D vector and 4x4 matrix mathematics for Vulkan in C17.
+ * @author Daniel Mosquera
+ * @copyright MIT License (c) 2025 Daniel Mosquera
  *
  * Implements column-major matrix arithmetic compatible with GLSL std140 layout
  * and Vulkan clip space coordinates ([0, 1] depth range, inverted Y).

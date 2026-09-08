@@ -1,6 +1,8 @@
 /**
  * @file textured_cube.c
  * @brief Complete GLFW sample application rendering a rotating textured 3D cube.
+ * @author Daniel Mosquera
+ * @copyright MIT License (c) 2025 Daniel Mosquera
  *
  * Demonstrates the end-to-end integration of vkc-bootstrap in pure C17:
  * - Vulkan Instance and Debug Messenger initialization

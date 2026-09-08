@@ -1,6 +1,8 @@
 /**
  * @file vkc_bootstrap.c
  * @brief Implementation of the Vulkan Bootstrap library in pure C17.
+ * @author Daniel Mosquera
+ * @copyright MIT License (c) 2025 Daniel Mosquera
  */
 
 #include "vkc_bootstrap.h"

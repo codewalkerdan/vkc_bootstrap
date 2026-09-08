@@ -5,178 +5,109 @@ sessionId: session-260907-203545-m1b8
 # Requirements
 
 ### Overview & Goals
-The goal of this task is to fix the swapchain creation failure (`Failed to create swapchain: VKB_ERROR_VULKAN_NOT_AVAILABLE: Vulkan loader or driver not available`) encountered when running the `textured_cube` example application.
-The root cause is that `vkb_create_swapchain` passed `VK_NULL_HANDLE` to `vkGetInstanceProcAddr` when resolving instance-level surface extension function pointers (`vkGetPhysicalDeviceSurfaceCapabilitiesKHR`, `vkGetPhysicalDeviceSurfaceFormatsKHR`, `vkGetPhysicalDeviceSurfacePresentModesKHR`), which per Vulkan specification requires a valid `VkInstance` handle.
-This change ensures that `VkInstance` is properly retained across `VkbPhysicalDevice`, `VkbDevice`, and `VkbSwapchainCreateInfo`, and used during function pointer resolution so swapchain creation succeeds seamlessly.
+The goal of this task is to establish official open-source licensing and root-level documentation for `vkc-bootstrap` to maximize project utility, legal clarity, and onboarding efficiency.
+We will add a standardized MIT License crediting `Daniel Mosquera` as the author, create a comprehensive and practical `README.md` in the repository root, update source file header metadata, and synchronize project handoff documentation.
 
 ### Scope
 
 #### In Scope
-- **Instance Handle Propagation**:
-  - Update `VkbPhysicalDevice` to store the parent `VkInstance instance` handle.
-  - Update `VkbSwapchainCreateInfo` and `VkbSwapchain` to store/forward the `VkInstance` handle.
-  - Ensure `vkb_evaluate_physical_device` assigns `out_candidate->physical_device.instance = info->instance`.
-  - Ensure `vkb_default_swapchain_info` copies `info.instance = device.physical_device.instance`.
-- **Dynamic ProcAddr Resolution in Swapchain Creation**:
-  - In `vkb_create_swapchain` (`vkc_bootstrap.c`), retrieve the valid `VkInstance` handle from `info->instance` (or `info->device.physical_device.instance`).
-  - Pass the valid `instance` handle to `vkGetInstanceProcAddr` for `vkGetPhysicalDeviceSurfaceCapabilitiesKHR`, `vkGetPhysicalDeviceSurfaceFormatsKHR`, and `vkGetPhysicalDeviceSurfacePresentModesKHR`.
-- **Validation and Build Verification**:
-  - Verify that the static library `vkc_bootstrap` and the `textured_cube` executable compile cleanly on Clang and GCC.
-  - Verify that swapchain creation and swapchain recreation succeed without `VKB_ERROR_VULKAN_NOT_AVAILABLE`.
+- **MIT License File (`LICENSE`)**:
+  - Standard MIT License text in the root directory.
+  - Explicit copyright statement: `Copyright (c) 2025 Daniel Mosquera`.
+- **Root Documentation (`README.md`)**:
+  - Project summary: Pure C17 native rewrite of `vk-bootstrap` with zero C++ dependencies.
+  - Key features: Instance & debug messenger, physical device scoring/selection, logical device & queue setup, swapchain management & recreation, internal scratch arena allocator.
+  - Quick-start code sample: Minimal end-to-end C17 initialization walkthrough.
+  - Build & usage instructions: CMake configuration for Clang, MinGW, and GCC, including the GLFW `textured_cube` example.
+  - Documentation index: Links to `docs/getting_started.md`, `docs/c_vs_cpp_differences.md`, and `docs/HANDOFF.md`.
+  - Author and License section explicitly attributing authorship to `Daniel Mosquera`.
+- **Source File Header Attribution**:
+  - Add `@author Daniel Mosquera` and MIT license headers to `vkc_bootstrap.h`, `vkc_bootstrap.c`, `examples/textured_cube.c`, and `examples/math3d.h`.
+- **Documentation Synchronization**:
+  - Update `docs/HANDOFF.md` to record the completed licensing, root documentation, and author attribution.
 
 #### Out of Scope
-- Changes to third-party dependencies (GLFW, Vulkan-Headers, STB).
-- Modifications to 3D cube geometry, shaders, or matrix mathematics.
+- Functional modifications to the Vulkan initialization core logic in `vkc_bootstrap.c`.
+- Changes to third-party dependencies or CMake build logic beyond doc examples.
 
 ### User Stories
-- **As a developer using `vkc-bootstrap`**, I want `vkb_create_swapchain` and `vkb_recreate_swapchain` to resolve surface extension function pointers correctly using the active `VkInstance` handle so that swapchain creation succeeds without bogus `VKB_ERROR_VULKAN_NOT_AVAILABLE` errors.
-- **As a maintainer**, I want all core structs (`VkbPhysicalDevice`, `VkbDevice`, `VkbSwapchain`) to have consistent parent instance references so that any future instance-level extension queries have direct access to the valid `VkInstance`.
+- **As a graphics / Vulkan developer**, I want a clear, well-structured `README.md` with build commands and practical C17 code examples so that I can evaluate and integrate `vkc-bootstrap` with minimal friction.
+- **As an open-source user or organization**, I want an explicit MIT `LICENSE` with clear attribution to `Daniel Mosquera` so that I have unambiguous rights to use, modify, and distribute the library.
+- **As the project author (Daniel Mosquera)**, I want consistent authorship and licensing metadata across repository entry points and source files.
 
 ### Functional Requirements
-1. **VkbPhysicalDevice Instance Storage**:
-   - `VkbPhysicalDevice` struct in `vkc_bootstrap.h` must contain a `VkInstance instance` field.
-   - `vkb_evaluate_physical_device` in `vkc_bootstrap.c` must populate `out_candidate->physical_device.instance = info->instance`.
-2. **VkbSwapchainCreateInfo and VkbSwapchain Handle Wiring**:
-   - `VkbSwapchainCreateInfo` must contain a `VkInstance instance` field.
-   - `vkb_default_swapchain_info(device, surface, width, height)` must initialize `info.instance = device.physical_device.instance`.
-   - `VkbSwapchain` must contain a `VkInstance instance` field populated upon creation.
-3. **Correct `vkGetInstanceProcAddr` Invocations**:
-   - `vkb_create_swapchain` must extract `instance = (info->instance != VK_NULL_HANDLE) ? info->instance : info->device.physical_device.instance`.
-   - `vkGetInstanceProcAddr(instance, ...)` must be used for:
-     - `vkGetPhysicalDeviceSurfaceCapabilitiesKHR`
-     - `vkGetPhysicalDeviceSurfaceFormatsKHR`
-     - `vkGetPhysicalDeviceSurfacePresentModesKHR`
-   - Validate that all required function pointers are non-NULL before proceeding with surface capability evaluation and `vkCreateSwapchainKHR`.
+1. **LICENSE Creation**:
+   - Create `LICENSE` in the root directory containing the standard MIT License text and `Copyright (c) 2025 Daniel Mosquera`.
+2. **README.md Creation**:
+   - Create `README.md` in the project root with the following sections:
+     - Title and overview of `vkc-bootstrap`.
+     - Key features and architectural advantages (pure C17, designated initializers, scratch arena allocator, Clang/MinGW/GCC support).
+     - Quick-start code snippet demonstrating instance, physical device, device, and swapchain initialization.
+     - Build instructions with CMake (static library and examples).
+     - Guide navigation pointing to `docs/getting_started.md`, `docs/c_vs_cpp_differences.md`, and `docs/HANDOFF.md`.
+     - Author section naming `Daniel Mosquera` and License section referencing the MIT license.
+3. **Source Header Metadata**:
+   - Update file comments in `vkc_bootstrap.h`, `vkc_bootstrap.c`, `examples/textured_cube.c`, and `examples/math3d.h` with `@author Daniel Mosquera` and MIT license notices.
+4. **Handoff Tracking**:
+   - Update `docs/HANDOFF.md` with the new files and completed deliverables.
 
 ### Non-Functional Requirements
-- **Standard Conformance**: Strict C17 standard compliance with zero warnings on `-Wall -Wextra -Wpedantic`.
-- **Vulkan Spec Compliance**: Fully conforms to Vulkan loader specification for `vkGetInstanceProcAddr` and `vkGetDeviceProcAddr` dispatching.
-- **Zero API Breaking Regressions**: Existing initialization calls remain binary and source compatible.
+- **Documentation Quality**: Clear, idiomatic Markdown with syntax-highlighted code blocks, valid relative links, and readable tables.
+- **Standard Adherence**: Standard MIT license format recognized by SPDX (`MIT`) and automated license scanners.
 
 # Technical Design
 
 ### Current Implementation
-In `vkc_bootstrap.c` (lines 1201–1214):
-```c
-PFN_vkGetPhysicalDeviceSurfaceCapabilitiesKHR pfn_get_surface_caps =
-    (PFN_vkGetPhysicalDeviceSurfaceCapabilitiesKHR)vkGetInstanceProcAddr(VK_NULL_HANDLE, "vkGetPhysicalDeviceSurfaceCapabilitiesKHR");
-PFN_vkGetPhysicalDeviceSurfaceFormatsKHR pfn_get_surface_formats =
-    (PFN_vkGetPhysicalDeviceSurfaceFormatsKHR)vkGetInstanceProcAddr(VK_NULL_HANDLE, "vkGetPhysicalDeviceSurfaceFormatsKHR");
-PFN_vkGetPhysicalDeviceSurfacePresentModesKHR pfn_get_surface_present_modes =
-    (PFN_vkGetPhysicalDeviceSurfacePresentModesKHR)vkGetInstanceProcAddr(VK_NULL_HANDLE, "vkGetPhysicalDeviceSurfacePresentModesKHR");
-```
-When `VK_NULL_HANDLE` is passed to `vkGetInstanceProcAddr`, the Vulkan loader only dispatches global commands (`vkCreateInstance`, `vkEnumerateInstanceExtensionProperties`, etc.). Surface extension functions are instance-level commands and return `NULL` when passed `VK_NULL_HANDLE`, triggering the guard and returning `VKB_ERROR_VULKAN_NOT_AVAILABLE`.
+The repository contains the complete C17 implementation (`vkc_bootstrap.h`, `vkc_bootstrap.c`), CMake build configuration (`CMakeLists.txt`), GLFW 3D textured cube sample (`examples/textured_cube.c`), and sub-guides in `docs/`, but currently lacks a root `LICENSE` file and root `README.md`.
 
 ### Key Decisions
-1. **Retain `VkInstance` in `VkbPhysicalDevice` and `VkbSwapchainCreateInfo`**:
-   - *Decision*: Add `VkInstance instance;` to `VkbPhysicalDevice`, `VkbSwapchainCreateInfo`, and `VkbSwapchain`.
-   - *Rationale*: Vulkan requires `VkInstance` to query instance-level extension functions (such as surface capabilities, formats, and present modes). Retaining the instance handle in `VkbPhysicalDevice` ensures `VkbDevice` (which embeds `VkbPhysicalDevice`) and `VkbSwapchainCreateInfo` (which embeds `VkbDevice`) have uninterrupted access to the parent instance.
-2. **Fallback Instance Resolution**:
-   - *Decision*: In `vkb_create_swapchain`, determine the instance via `(info->instance != VK_NULL_HANDLE) ? info->instance : info->device.physical_device.instance`.
-   - *Rationale*: Guarantees that whether callers initialize via `vkb_default_swapchain_info` or designated initializers, the instance handle is correctly acquired.
+1. **Standard SPDX MIT License**:
+   - *Decision*: Place standard MIT License in `LICENSE` with `Copyright (c) 2025 Daniel Mosquera`.
+   - *Rationale*: Provides maximum practical utility and permissive adoption for downstream projects while ensuring clean legal attribution.
+2. **Comprehensive Root README with Functional Code Snippets**:
+   - *Decision*: Provide an all-in-one root `README.md` containing an executive summary, architectural comparison table, concise C17 code example, build instructions for Clang/MinGW, and documentation directory links.
+   - *Rationale*: Minimizes time-to-first-render for downstream developers and delivers highest practical reference value directly from the repository root.
+3. **Source Header Doxygen Attribution**:
+   - *Decision*: Include `@author Daniel Mosquera` and `@copyright MIT License` in the Doxygen headers of `vkc_bootstrap.h`, `vkc_bootstrap.c`, and example files.
+   - *Rationale*: Embeds author metadata into generated documentation and IDE inspections.
 
-### Architecture & Data Flow
-
-```mermaid
-graph TD
-    Inst[VkbInstance] -->|info.instance| PDevSel[vkb_select_physical_device]
-    PDevSel -->|Embeds instance| PDev[VkbPhysicalDevice]
-    PDev -->|Embeds physical_device| Dev[VkbDevice]
-    Dev -->|Embeds device with instance| SwpCfg[VkbSwapchainCreateInfo]
-    SwpCfg -->|vkGetInstanceProcAddr instance| SwpFuncs[Surface Function Pointers]
-    SwpFuncs -->|vkCreateSwapchainKHR dev| Swp[VkbSwapchain]
-```
-
-### Data Models & Contracts
-
-#### `vkc_bootstrap.h` Updates:
-```c
-typedef struct VkbPhysicalDevice {
-    VkPhysicalDevice physical_device;                   /**< The raw VkPhysicalDevice handle. */
-    VkInstance instance;                                /**< Parent Vulkan instance handle. */
-    VkSurfaceKHR surface;                               /**< The surface handle used during selection (if any). */
-    VkPhysicalDeviceProperties properties;             /**< Physical device properties. */
-    VkPhysicalDeviceFeatures features;                 /**< Supported physical device features. */
-    VkPhysicalDeviceMemoryProperties memory_properties; /**< Memory budget and heap properties. */
-    ...
-} VkbPhysicalDevice;
-
-typedef struct VkbSwapchainCreateInfo {
-    VkInstance instance;                                /**< Optional explicit Vulkan instance handle (falls back to device.physical_device.instance). */
-    VkbDevice device;                                   /**< Logical device handle. */
-    VkSurfaceKHR surface;                               /**< Window surface handle. */
-    ...
-} VkbSwapchainCreateInfo;
-
-typedef struct VkbSwapchain {
-    VkSwapchainKHR swapchain;                           /**< Raw VkSwapchainKHR handle. */
-    VkDevice device;                                    /**< Logical device the swapchain belongs to. */
-    VkInstance instance;                                /**< Parent Vulkan instance handle. */
-    VkFormat image_format;                              /**< Selected image format. */
-    VkColorSpaceKHR color_space;                        /**< Selected color space. */
-    VkExtent2D extent;                                  /**< Clamped and resolved swapchain extent. */
-    uint32_t image_count;                               /**< Number of presentable images in the swapchain. */
-    const VkAllocationCallbacks* allocation_callbacks;  /**< Stored allocation callbacks for destruction. */
-} VkbSwapchain;
-```
-
-#### `vkc_bootstrap.c` Updates:
-```c
-/* In vkb_evaluate_physical_device: */
-out_candidate->physical_device.physical_device = pdev;
-out_candidate->physical_device.instance = info->instance;
-out_candidate->physical_device.surface = info->surface;
-
-/* In vkb_default_swapchain_info: */
-info.instance = device.physical_device.instance;
-info.device = device;
-info.surface = surface;
-
-/* In vkb_create_swapchain: */
-VkInstance instance = (info->instance != VK_NULL_HANDLE) ? info->instance : info->device.physical_device.instance;
-if (instance == VK_NULL_HANDLE) {
-    return VKB_ERROR_INVALID_ARGUMENT;
-}
-
-PFN_vkGetPhysicalDeviceSurfaceCapabilitiesKHR pfn_get_surface_caps =
-    (PFN_vkGetPhysicalDeviceSurfaceCapabilitiesKHR)vkGetInstanceProcAddr(instance, "vkGetPhysicalDeviceSurfaceCapabilitiesKHR");
-PFN_vkGetPhysicalDeviceSurfaceFormatsKHR pfn_get_surface_formats =
-    (PFN_vkGetPhysicalDeviceSurfaceFormatsKHR)vkGetInstanceProcAddr(instance, "vkGetPhysicalDeviceSurfaceFormatsKHR");
-PFN_vkGetPhysicalDeviceSurfacePresentModesKHR pfn_get_surface_present_modes =
-    (PFN_vkGetPhysicalDeviceSurfacePresentModesKHR)vkGetInstanceProcAddr(instance, "vkGetPhysicalDeviceSurfacePresentModesKHR");
-```
+### File Structure & Changes
+- `LICENSE` (new): Full MIT license text for Daniel Mosquera.
+- `README.md` (new): Root project guide, feature overview, quick-start example, build instructions, and author/license info.
+- `vkc_bootstrap.h` (updated): Added `@author Daniel Mosquera` and MIT notice to file docstring.
+- `vkc_bootstrap.c` (updated): Added `@author Daniel Mosquera` and MIT notice to file docstring.
+- `examples/textured_cube.c` (updated): Added `@author Daniel Mosquera` and MIT notice to file docstring.
+- `examples/math3d.h` (updated): Added `@author Daniel Mosquera` and MIT notice to file docstring.
+- `docs/HANDOFF.md` (updated): Record metadata and root documentation completion.
 
 ### Risks & Mitigations
-- **Risk**: `info->device.physical_device.instance` might be `VK_NULL_HANDLE` if a user manually constructs `VkbDevice` without setting `instance`.
-- **Mitigation**: Allow explicit override in `VkbSwapchainCreateInfo.instance` and validate `instance != VK_NULL_HANDLE`, returning `VKB_ERROR_INVALID_ARGUMENT` if neither is provided.
+- **Risk**: Out-of-date or non-compiling code snippets in `README.md`.
+- **Mitigation**: Base all documentation snippets strictly on verified `vkc_bootstrap.h` types and `examples/textured_cube.c` flows.
 
 # Testing
 
 ### Validation Approach
-Verify that `vkc_bootstrap` static library and `textured_cube` application compile and link without errors, and that swapchain creation resolves all surface extension pointers using the active `VkInstance`.
+Verify document formatting, Markdown link resolution, code snippet accuracy against the public API, and clean build compilation.
 
 ### Key Scenarios
-1. **Compilation Validation**:
-   - Recompile `vkc_bootstrap` and `textured_cube` with Clang and GCC using `-std=c17 -Wall -Wextra -Wpedantic`.
-2. **Swapchain Creation Resolution**:
-   - Verify that `pfn_get_surface_caps`, `pfn_get_surface_formats`, and `pfn_get_surface_present_modes` return valid non-NULL function pointers from `vkGetInstanceProcAddr(instance, ...)`.
-   - Verify that `vkb_create_swapchain` returns `VKB_SUCCESS` and populates `out_swapchain` with valid extent, formats, and image count.
-3. **Swapchain Recreation on Resize**:
-   - Verify `vkb_recreate_swapchain` successfully queries capabilities on window resize and recreates the swapchain with the new dimensions.
+1. **Markdown Formatting & Link Resolution**:
+   - Verify that all relative links in `README.md` (`docs/getting_started.md`, `docs/c_vs_cpp_differences.md`, `docs/HANDOFF.md`, `LICENSE`) correctly point to existing files.
+2. **Code Snippet Accuracy**:
+   - Verify that the C17 sample code in `README.md` accurately uses `vkb_default_*_info()`, `VkbResult` checks, and `vkb_destroy_*()` routines.
+3. **Build & Header Hygiene**:
+   - Recompile `vkc_bootstrap` and `textured_cube` using Clang and GCC to ensure updated comments introduce no syntax issues or build warnings.
 
 # Delivery Steps
 
-### ✓ Step 1: Propagate VkInstance handle in core structs and fix proc address loading
-Update `VkbPhysicalDevice`, `VkbSwapchainCreateInfo`, and `VkbSwapchain` in `vkc_bootstrap.h` and fix `vkGetInstanceProcAddr` calls in `vkc_bootstrap.c`.
+### ✓ Step 1: Add MIT License file and update source file author metadata
+Create the root `LICENSE` file and embed author attribution in all project source headers.
 
-- Add `VkInstance instance;` field to `VkbPhysicalDevice`, `VkbSwapchainCreateInfo`, and `VkbSwapchain` in `vkc_bootstrap.h`.
-- In `vkc_bootstrap.c`, update `vkb_evaluate_physical_device` to store `out_candidate->physical_device.instance = info->instance`.
-- In `vkc_bootstrap.c`, update `vkb_default_swapchain_info` to assign `info.instance = device.physical_device.instance`.
-- In `vkc_bootstrap.c`, update `vkb_create_swapchain` to resolve `vkGetPhysicalDeviceSurfaceCapabilitiesKHR`, `vkGetPhysicalDeviceSurfaceFormatsKHR`, and `vkGetPhysicalDeviceSurfacePresentModesKHR` using the valid `instance` handle.
+- Create `LICENSE` in the repository root containing standard MIT license text with `Copyright (c) 2025 Daniel Mosquera`.
+- Update file header Doxygen comments in `vkc_bootstrap.h`, `vkc_bootstrap.c`, `examples/textured_cube.c`, and `examples/math3d.h` with `@author Daniel Mosquera` and MIT license notices.
 
-### ✓ Step 2: Validate build and verify swapchain creation in example application
-Build the project using CMake across Clang and GCC profiles and verify that the example application builds and runs without swapchain errors.
+### ✓ Step 2: Create comprehensive README.md and update documentation tracking
+Author the root `README.md` with project overview, quick-start code, build instructions, and author attribution, then update handoff notes.
 
-- Run CMake build for `vkc_bootstrap` static library and `textured_cube` executable.
-- Verify that `vkb_create_swapchain` and `vkb_recreate_swapchain` return `VKB_SUCCESS`.
-- Update `docs/HANDOFF.md` to document the bug fix and status.
+- Create `README.md` with project summary, key features, C17 quick-start snippet, CMake build commands for Clang/MinGW/GCC, documentation index, and Author/License sections.
+- Update `docs/HANDOFF.md` to record the completed root documentation and licensing milestone.
+- Verify that all Markdown links and code snippets match the active codebase.

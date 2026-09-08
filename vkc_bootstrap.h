@@ -1,6 +1,8 @@
 /**
  * @file vkc_bootstrap.h
  * @brief Vulkan Bootstrap library in pure C17.
+ * @author Daniel Mosquera
+ * @copyright MIT License (c) 2025 Daniel Mosquera
  *
  * An idiomatic, cross-platform Vulkan initialization library written in pure C17
  * that provides clean and robust abstractions for creating Vulkan instances,

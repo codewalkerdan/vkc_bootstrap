@@ -54,6 +54,11 @@ The complete C17 rewrite of the `vk-bootstrap` library (`vkc-bootstrap`) has bee
    - Created `docs/c_vs_cpp_differences.md` comparing C++ builder patterns to C17 designated initializers.
    - Full Doxygen comments on all public header declarations in `vkc_bootstrap.h`.
 
+10. **MIT Licensing, Root Documentation & Author Attribution**:
+   - Added standard MIT `LICENSE` with explicit copyright statement: `Copyright (c) 2025 Daniel Mosquera`.
+   - Created comprehensive root `README.md` containing library overview, feature highlights, C17 quick-start guide, CMake build instructions across Clang, GCC, and MinGW, and links to documentation guides.
+   - Updated source file header comments in `vkc_bootstrap.h`, `vkc_bootstrap.c`, `examples/textured_cube.c`, and `examples/math3d.h` attributing authorship to `Daniel Mosquera` under the MIT license.
+
 ---
 
 ## Build Verification Instructions
