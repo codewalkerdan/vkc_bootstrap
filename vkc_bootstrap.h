@@ -205,6 +205,7 @@ typedef struct VkbPhysicalDeviceSelectorInfo {
  */
 typedef struct VkbPhysicalDevice {
     VkPhysicalDevice physical_device;                   /**< The raw VkPhysicalDevice handle. */
+    VkInstance instance;                                /**< Parent Vulkan instance handle. */
     VkSurfaceKHR surface;                               /**< The surface handle used during selection (if any). */
     VkPhysicalDeviceProperties properties;             /**< Physical device properties. */
     VkPhysicalDeviceFeatures features;                 /**< Supported physical device features. */
@@ -390,6 +391,7 @@ VkbResult vkb_device_get_dedicated_queue(
  * @brief Configuration parameters for creating or recreating a Vulkan swapchain.
  */
 typedef struct VkbSwapchainCreateInfo {
+    VkInstance instance;                                /**< Optional explicit Vulkan instance handle (falls back to device.physical_device.instance). */
     VkbDevice device;                                   /**< Logical device handle. */
     VkSurfaceKHR surface;                               /**< Window surface handle. */
 
@@ -417,6 +419,7 @@ typedef struct VkbSwapchainCreateInfo {
 typedef struct VkbSwapchain {
     VkSwapchainKHR swapchain;                           /**< Raw VkSwapchainKHR handle. */
     VkDevice device;                                    /**< Logical device the swapchain belongs to. */
+    VkInstance instance;                                /**< Parent Vulkan instance handle. */
     VkFormat image_format;                              /**< Selected image format. */
     VkColorSpaceKHR color_space;                        /**< Selected color space. */
     VkExtent2D extent;                                  /**< Clamped and resolved swapchain extent. */

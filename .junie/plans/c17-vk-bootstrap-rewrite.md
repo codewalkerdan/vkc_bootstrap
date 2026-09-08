@@ -5,291 +5,178 @@ sessionId: session-260907-203545-m1b8
 # Requirements
 
 ### Overview & Goals
-The goal of this phase is to eliminate obsolete placeholder code (`library.c` and `library.h`) and deliver a complete, high-utility **GLFW sample application** in pure C17.
-The sample demonstrates the end-to-end integration of `vkc-bootstrap` by initializing Vulkan, creating a window surface via GLFW, configuring devices and swapchains, loading a texture from `assets/textures/crate.png`, and rendering a rotating textured 3D cube with depth testing, dynamic window resize handling, and clean shutdown.
+The goal of this task is to fix the swapchain creation failure (`Failed to create swapchain: VKB_ERROR_VULKAN_NOT_AVAILABLE: Vulkan loader or driver not available`) encountered when running the `textured_cube` example application.
+The root cause is that `vkb_create_swapchain` passed `VK_NULL_HANDLE` to `vkGetInstanceProcAddr` when resolving instance-level surface extension function pointers (`vkGetPhysicalDeviceSurfaceCapabilitiesKHR`, `vkGetPhysicalDeviceSurfaceFormatsKHR`, `vkGetPhysicalDeviceSurfacePresentModesKHR`), which per Vulkan specification requires a valid `VkInstance` handle.
+This change ensures that `VkInstance` is properly retained across `VkbPhysicalDevice`, `VkbDevice`, and `VkbSwapchainCreateInfo`, and used during function pointer resolution so swapchain creation succeeds seamlessly.
 
 ### Scope
 
 #### In Scope
-- **Removal of Legacy Files**: Delete obsolete `library.c` and `library.h` files to keep the repository streamlined and focused.
-- **Sample Application Target (`textured_cube`)**:
-  - GLFW window creation and surface integration.
-  - Complete `vkc-bootstrap` setup: Instance, Physical Device selection, Logical Device creation, Swapchain & Image Views creation.
-  - Texture loading: Decode `assets/textures/crate.png` via `stb_image`, upload via staging buffer, transition image layout, and sample with linear filtering.
-  - 3D Geometry & Math: Define 3D cube vertex positions, UV coordinates, and 36-index buffer; implement C17 matrix math (Perspective, View LookAt, Model rotation, MVP calculation).
-  - Depth Buffering: Create depth image, memory, and view to ensure correct 3D occlusion.
-  - Graphics Pipeline & Shaders: GLSL/SPIR-V vertex and fragment shaders for textured 3D rendering.
-  - Synchronization & Render Loop: Frame synchronization (semaphores and fences), command buffer recording, and presentation.
-  - Swapchain Recreation: Responsive window resize handling via `vkb_recreate_swapchain()`.
-  - Graceful Resource Teardown: Reverse-order destruction with zero memory or handle leaks.
-- **CMake Integration**:
-  - Configure `CMakeLists.txt` with `VKC_BOOTSTRAP_BUILD_EXAMPLES` option (default `ON`).
-  - Automated retrieval of GLFW (v3.4) and `stb_image` via CMake `FetchContent` to ensure seamless compilation across Clang and MinGW profiles without manual external setup.
-- **Documentation**:
-  - Update `docs/getting_started.md` and `docs/HANDOFF.md` with instructions on building and running the sample application.
+- **Instance Handle Propagation**:
+  - Update `VkbPhysicalDevice` to store the parent `VkInstance instance` handle.
+  - Update `VkbSwapchainCreateInfo` and `VkbSwapchain` to store/forward the `VkInstance` handle.
+  - Ensure `vkb_evaluate_physical_device` assigns `out_candidate->physical_device.instance = info->instance`.
+  - Ensure `vkb_default_swapchain_info` copies `info.instance = device.physical_device.instance`.
+- **Dynamic ProcAddr Resolution in Swapchain Creation**:
+  - In `vkb_create_swapchain` (`vkc_bootstrap.c`), retrieve the valid `VkInstance` handle from `info->instance` (or `info->device.physical_device.instance`).
+  - Pass the valid `instance` handle to `vkGetInstanceProcAddr` for `vkGetPhysicalDeviceSurfaceCapabilitiesKHR`, `vkGetPhysicalDeviceSurfaceFormatsKHR`, and `vkGetPhysicalDeviceSurfacePresentModesKHR`.
+- **Validation and Build Verification**:
+  - Verify that the static library `vkc_bootstrap` and the `textured_cube` executable compile cleanly on Clang and GCC.
+  - Verify that swapchain creation and swapchain recreation succeed without `VKB_ERROR_VULKAN_NOT_AVAILABLE`.
 
 #### Out of Scope
-- Complex game engine features (lighting models, audio, scene graphs, physics).
-- Third-party UI framework integrations (e.g. Dear ImGui).
+- Changes to third-party dependencies (GLFW, Vulkan-Headers, STB).
+- Modifications to 3D cube geometry, shaders, or matrix mathematics.
 
 ### User Stories
-- **As a graphics developer**, I want a functional, compilable C17 sample application rendering a textured 3D cube so that I can see concrete, practical usage of `vkc-bootstrap` in a real-world rendering loop.
-- **As a developer on Windows/Linux with Clang or MinGW**, I want the sample application to build effortlessly out of the box via CMake without having to manually install or configure system GLFW or image libraries.
-- **As a project maintainer**, I want obsolete template files removed so that the repository contains only purposeful, clean code.
+- **As a developer using `vkc-bootstrap`**, I want `vkb_create_swapchain` and `vkb_recreate_swapchain` to resolve surface extension function pointers correctly using the active `VkInstance` handle so that swapchain creation succeeds without bogus `VKB_ERROR_VULKAN_NOT_AVAILABLE` errors.
+- **As a maintainer**, I want all core structs (`VkbPhysicalDevice`, `VkbDevice`, `VkbSwapchain`) to have consistent parent instance references so that any future instance-level extension queries have direct access to the valid `VkInstance`.
 
 ### Functional Requirements
-1. **File Cleanup**:
-   - Safely remove `library.c` and `library.h` from the project repository.
-2. **Build Configuration**:
-   - Provide `VKC_BOOTSTRAP_BUILD_EXAMPLES` CMake option (default `ON`).
-   - Integrate GLFW using CMake `FetchContent` (with fallback to `find_package(glfw3)` if present).
-   - Ensure target `textured_cube` links with `vkc_bootstrap`, `glfw`, and Vulkan loader.
-3. **Texture Loading & Vulkan Image Management**:
-   - Load `assets/textures/crate.png` into RGBA8 pixel memory using `stb_image`.
-   - Create Vulkan staging buffer (`VK_BUFFER_USAGE_TRANSFER_SRC_BIT`) and device-local `VkImage` (`VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT`).
-   - Transition image layout (`UNDEFINED` -> `TRANSFER_DST_OPTIMAL` -> `SHADER_READ_ONLY_OPTIMAL`) using a one-time command buffer.
-   - Create `VkImageView` and `VkSampler` (with linear filtering and clamp-to-edge/repeat).
-4. **3D Geometry & Mathematics**:
-   - Define vertex structure `Vertex3D` containing `float pos[3]`, `float normal[3]`, and `float uv[2]`.
-   - Provide 24 cube vertices (4 per face) and 36 indices for a complete unit cube.
-   - Implement pure C17 matrix math functions in `examples/math3d.h` for 4x4 matrix identity, perspective projection, camera look-at, and rotation.
-5. **Vulkan Rendering Pipeline**:
-   - Select physical device requiring `samplerAnisotropy` and swapchain support.
-   - Create depth attachment image with suitable format (`VK_FORMAT_D32_SFLOAT` or `VK_FORMAT_D24_UNORM_S8_UINT`).
-   - Create render pass with color and depth attachments.
-   - Create descriptor set layout and pool binding Uniform Buffer (MVP matrix) and Combined Image Sampler (`crate.png`).
-   - Create graphics pipeline with backface culling (`VK_CULL_MODE_BACK_BIT`), depth testing, and depth writing enabled.
-6. **Swapchain Recreation & Window Resizing**:
-   - Handle window minimization (width/height = 0) gracefully by pausing rendering.
-   - On window resize event, query new framebuffer size and recreate swapchain, depth buffer, and framebuffers using `vkb_recreate_swapchain()`.
-7. **Clean Teardown**:
-   - Wait for device idle before destroying resources.
-   - Destroy graphics pipeline, descriptors, buffers, images, samplers, swapchain, device, surface, debug messenger, instance, and GLFW window.
+1. **VkbPhysicalDevice Instance Storage**:
+   - `VkbPhysicalDevice` struct in `vkc_bootstrap.h` must contain a `VkInstance instance` field.
+   - `vkb_evaluate_physical_device` in `vkc_bootstrap.c` must populate `out_candidate->physical_device.instance = info->instance`.
+2. **VkbSwapchainCreateInfo and VkbSwapchain Handle Wiring**:
+   - `VkbSwapchainCreateInfo` must contain a `VkInstance instance` field.
+   - `vkb_default_swapchain_info(device, surface, width, height)` must initialize `info.instance = device.physical_device.instance`.
+   - `VkbSwapchain` must contain a `VkInstance instance` field populated upon creation.
+3. **Correct `vkGetInstanceProcAddr` Invocations**:
+   - `vkb_create_swapchain` must extract `instance = (info->instance != VK_NULL_HANDLE) ? info->instance : info->device.physical_device.instance`.
+   - `vkGetInstanceProcAddr(instance, ...)` must be used for:
+     - `vkGetPhysicalDeviceSurfaceCapabilitiesKHR`
+     - `vkGetPhysicalDeviceSurfaceFormatsKHR`
+     - `vkGetPhysicalDeviceSurfacePresentModesKHR`
+   - Validate that all required function pointers are non-NULL before proceeding with surface capability evaluation and `vkCreateSwapchainKHR`.
 
 ### Non-Functional Requirements
-- **Standard Conformance**: Strict C17 standard compliance with clean compilation on `-Wall -Wextra -Wpedantic`.
-- **Portability**: Tested and verified on Clang (Linux/macOS) and MinGW (Windows).
-- **Zero Resource Leaks**: All Vulkan handles, memory allocations, staging buffers, and host pointers released cleanly.
-- **Code Clarity**: High utility, readable, self-contained implementation with informative comments explaining each Vulkan step.
+- **Standard Conformance**: Strict C17 standard compliance with zero warnings on `-Wall -Wextra -Wpedantic`.
+- **Vulkan Spec Compliance**: Fully conforms to Vulkan loader specification for `vkGetInstanceProcAddr` and `vkGetDeviceProcAddr` dispatching.
+- **Zero API Breaking Regressions**: Existing initialization calls remain binary and source compatible.
 
 # Technical Design
 
 ### Current Implementation
-The repository currently contains:
-- `vkc_bootstrap.h` and `vkc_bootstrap.c`: Complete C17 rewrite of `vk-bootstrap`.
-- `assets/textures/crate.png`: 2D crate texture asset for the cube sample.
-- `CMakeLists.txt`: Configured for building static library `vkc_bootstrap`.
-- `library.c` / `library.h`: Obsolete starter files to be removed.
+In `vkc_bootstrap.c` (lines 1201–1214):
+```c
+PFN_vkGetPhysicalDeviceSurfaceCapabilitiesKHR pfn_get_surface_caps =
+    (PFN_vkGetPhysicalDeviceSurfaceCapabilitiesKHR)vkGetInstanceProcAddr(VK_NULL_HANDLE, "vkGetPhysicalDeviceSurfaceCapabilitiesKHR");
+PFN_vkGetPhysicalDeviceSurfaceFormatsKHR pfn_get_surface_formats =
+    (PFN_vkGetPhysicalDeviceSurfaceFormatsKHR)vkGetInstanceProcAddr(VK_NULL_HANDLE, "vkGetPhysicalDeviceSurfaceFormatsKHR");
+PFN_vkGetPhysicalDeviceSurfacePresentModesKHR pfn_get_surface_present_modes =
+    (PFN_vkGetPhysicalDeviceSurfacePresentModesKHR)vkGetInstanceProcAddr(VK_NULL_HANDLE, "vkGetPhysicalDeviceSurfacePresentModesKHR");
+```
+When `VK_NULL_HANDLE` is passed to `vkGetInstanceProcAddr`, the Vulkan loader only dispatches global commands (`vkCreateInstance`, `vkEnumerateInstanceExtensionProperties`, etc.). Surface extension functions are instance-level commands and return `NULL` when passed `VK_NULL_HANDLE`, triggering the guard and returning `VKB_ERROR_VULKAN_NOT_AVAILABLE`.
 
 ### Key Decisions
-1. **Legacy File Removal**:
-   - *Decision*: Delete `library.c` and `library.h`.
-   - *Rationale*: Eliminates dead code, avoiding confusion and maximizing codebase clarity.
-2. **Automated GLFW & STB Dependency Resolution via FetchContent**:
-   - *Decision*: Use CMake `FetchContent` to retrieve official GLFW (v3.4) and STB single-header repository.
-   - *Rationale*: Maximizes developer productivity and cross-platform reliability by enabling zero-configuration builds on both Clang and MinGW.
-3. **Self-Contained C17 Math Library (`math3d.h`)**:
-   - *Decision*: Provide a compact, self-contained 3D math header in `examples/math3d.h` implementing matrix creation, multiplication, perspective projection (Vulkan clip space correction), and rotation.
-   - *Rationale*: Avoids heavy external math dependencies while providing maximum transparency and instructional value.
-4. **Shaders with Embedded Bytecode and Build-time GLSLC Target**:
-   - *Decision*: Provide GLSL shader sources (`cube.vert`, `cube.frag`) along with precompiled SPIR-V C header arrays (`cube_vert_spv.h`, `cube_frag_spv.h`), supplemented with CMake `glslc` recompilation commands when Vulkan SDK tools are present.
-   - *Rationale*: Guarantees immediate out-of-the-box compilation even on machines without `glslc` installed, while still supporting shader editing and recompilation.
-5. **Depth Buffer Integration**:
-   - *Decision*: Add a depth attachment using `VK_FORMAT_D32_SFLOAT` (with fallback to `VK_FORMAT_D24_UNORM_S8_UINT` / `VK_FORMAT_D16_UNORM`).
-   - *Rationale*: Required for proper 3D rendering so that occluded back faces of the rotating cube do not overwrite front faces.
-6. **Swapchain Recreation Flow**:
-   - *Decision*: Use `vkb_recreate_swapchain()` on window resize and `VK_SUBOPTIMAL_KHR` / `VK_ERROR_OUT_OF_DATE_KHR` results.
-   - *Rationale*: Demonstrates the swapchain recreation capability of `vkc-bootstrap`.
+1. **Retain `VkInstance` in `VkbPhysicalDevice` and `VkbSwapchainCreateInfo`**:
+   - *Decision*: Add `VkInstance instance;` to `VkbPhysicalDevice`, `VkbSwapchainCreateInfo`, and `VkbSwapchain`.
+   - *Rationale*: Vulkan requires `VkInstance` to query instance-level extension functions (such as surface capabilities, formats, and present modes). Retaining the instance handle in `VkbPhysicalDevice` ensures `VkbDevice` (which embeds `VkbPhysicalDevice`) and `VkbSwapchainCreateInfo` (which embeds `VkbDevice`) have uninterrupted access to the parent instance.
+2. **Fallback Instance Resolution**:
+   - *Decision*: In `vkb_create_swapchain`, determine the instance via `(info->instance != VK_NULL_HANDLE) ? info->instance : info->device.physical_device.instance`.
+   - *Rationale*: Guarantees that whether callers initialize via `vkb_default_swapchain_info` or designated initializers, the instance handle is correctly acquired.
 
-### Architecture Diagram
+### Architecture & Data Flow
 
 ```mermaid
 graph TD
-    subgraph Host Application & Windowing
-        GLFW[GLFW Window] -->|glfwCreateWindowSurface| Surface[VkSurfaceKHR]
-    end
-
-    subgraph vkc-bootstrap Subsystem
-        Surface -->|Instance + Surface| PDevSel[vkb_select_physical_device]
-        PDevSel --> PDev[VkbPhysicalDevice]
-        PDev -->|Create Device| Dev[VkbDevice]
-        Dev & Surface -->|Create Swapchain| Swp[VkbSwapchain]
-    end
-
-    subgraph Sample Asset & Pipeline Subsystem
-        CratePNG[assets/textures/crate.png] -->|stb_image| HostPixels[RGBA8 Buffer]
-        HostPixels -->|Staging Buffer| TexImg[VkImage + VkSampler]
-        CubeData[Cube Vertices & Indices] -->|VBO / IBO| VertBuf[VkBuffer]
-        Math3D[math3d.h MVP Matrix] -->|UBO| UnifBuf[VkBuffer]
-        DepthImg[Depth VkImage] --> DepthView[VkImageView]
-        
-        TexImg & UnifBuf --> DescSet[Descriptor Set]
-        DescSet & VertBuf & DepthView & Swp --> Pipe[Graphics Pipeline]
-        Pipe --> Draw[Command Buffer Draw & Present]
-    end
+    Inst[VkbInstance] -->|info.instance| PDevSel[vkb_select_physical_device]
+    PDevSel -->|Embeds instance| PDev[VkbPhysicalDevice]
+    PDev -->|Embeds physical_device| Dev[VkbDevice]
+    Dev -->|Embeds device with instance| SwpCfg[VkbSwapchainCreateInfo]
+    SwpCfg -->|vkGetInstanceProcAddr instance| SwpFuncs[Surface Function Pointers]
+    SwpFuncs -->|vkCreateSwapchainKHR dev| Swp[VkbSwapchain]
 ```
 
 ### Data Models & Contracts
 
-#### 1. 3D Vertex Definition
+#### `vkc_bootstrap.h` Updates:
 ```c
-typedef struct Vertex3D {
-    float pos[3];       /* x, y, z */
-    float normal[3];    /* nx, ny, nz */
-    float uv[2];        /* u, v */
-} Vertex3D;
+typedef struct VkbPhysicalDevice {
+    VkPhysicalDevice physical_device;                   /**< The raw VkPhysicalDevice handle. */
+    VkInstance instance;                                /**< Parent Vulkan instance handle. */
+    VkSurfaceKHR surface;                               /**< The surface handle used during selection (if any). */
+    VkPhysicalDeviceProperties properties;             /**< Physical device properties. */
+    VkPhysicalDeviceFeatures features;                 /**< Supported physical device features. */
+    VkPhysicalDeviceMemoryProperties memory_properties; /**< Memory budget and heap properties. */
+    ...
+} VkbPhysicalDevice;
 
-typedef struct UniformBufferObject {
-    mat4 model;
-    mat4 view;
-    mat4 proj;
-} UniformBufferObject;
+typedef struct VkbSwapchainCreateInfo {
+    VkInstance instance;                                /**< Optional explicit Vulkan instance handle (falls back to device.physical_device.instance). */
+    VkbDevice device;                                   /**< Logical device handle. */
+    VkSurfaceKHR surface;                               /**< Window surface handle. */
+    ...
+} VkbSwapchainCreateInfo;
+
+typedef struct VkbSwapchain {
+    VkSwapchainKHR swapchain;                           /**< Raw VkSwapchainKHR handle. */
+    VkDevice device;                                    /**< Logical device the swapchain belongs to. */
+    VkInstance instance;                                /**< Parent Vulkan instance handle. */
+    VkFormat image_format;                              /**< Selected image format. */
+    VkColorSpaceKHR color_space;                        /**< Selected color space. */
+    VkExtent2D extent;                                  /**< Clamped and resolved swapchain extent. */
+    uint32_t image_count;                               /**< Number of presentable images in the swapchain. */
+    const VkAllocationCallbacks* allocation_callbacks;  /**< Stored allocation callbacks for destruction. */
+} VkbSwapchain;
 ```
 
-#### 2. Math3D Function Signatures (`examples/math3d.h`)
+#### `vkc_bootstrap.c` Updates:
 ```c
-typedef struct { float m[4][4]; } mat4;
-typedef struct { float v[3]; } vec3;
+/* In vkb_evaluate_physical_device: */
+out_candidate->physical_device.physical_device = pdev;
+out_candidate->physical_device.instance = info->instance;
+out_candidate->physical_device.surface = info->surface;
 
-mat4 mat4_identity(void);
-mat4 mat4_mul(mat4 a, mat4 b);
-mat4 mat4_perspective(float fovy_rad, float aspect, float z_near, float z_far);
-mat4 mat4_look_at(vec3 eye, vec3 center, vec3 up);
-mat4 mat4_rotate(mat4 m, float angle_rad, vec3 axis);
-mat4 mat4_translate(mat4 m, vec3 v);
+/* In vkb_default_swapchain_info: */
+info.instance = device.physical_device.instance;
+info.device = device;
+info.surface = surface;
+
+/* In vkb_create_swapchain: */
+VkInstance instance = (info->instance != VK_NULL_HANDLE) ? info->instance : info->device.physical_device.instance;
+if (instance == VK_NULL_HANDLE) {
+    return VKB_ERROR_INVALID_ARGUMENT;
+}
+
+PFN_vkGetPhysicalDeviceSurfaceCapabilitiesKHR pfn_get_surface_caps =
+    (PFN_vkGetPhysicalDeviceSurfaceCapabilitiesKHR)vkGetInstanceProcAddr(instance, "vkGetPhysicalDeviceSurfaceCapabilitiesKHR");
+PFN_vkGetPhysicalDeviceSurfaceFormatsKHR pfn_get_surface_formats =
+    (PFN_vkGetPhysicalDeviceSurfaceFormatsKHR)vkGetInstanceProcAddr(instance, "vkGetPhysicalDeviceSurfaceFormatsKHR");
+PFN_vkGetPhysicalDeviceSurfacePresentModesKHR pfn_get_surface_present_modes =
+    (PFN_vkGetPhysicalDeviceSurfacePresentModesKHR)vkGetInstanceProcAddr(instance, "vkGetPhysicalDeviceSurfacePresentModesKHR");
 ```
-
-#### 3. Sample Application Architecture (`examples/textured_cube.c`)
-- **Initialization Stage**:
-  1. Initialize GLFW and create a window with `GLFW_CLIENT_API = GLFW_NO_API`.
-  2. Create Vulkan Instance with `vkb_default_instance_info()` + validation layers.
-  3. Create GLFW Vulkan window surface.
-  4. Select physical device with `vkb_select_physical_device()` (requiring anisotropy and swapchain).
-  5. Create logical device with `vkb_create_device()`.
-  6. Create swapchain and image views with `vkb_create_swapchain()` and `vkb_swapchain_get_image_views()`.
-  7. Create depth buffer image, allocation, and image view.
-  8. Create render pass with color and depth attachments.
-  9. Create descriptor set layout (binding 0: UBO, binding 1: Sampler).
-  10. Create graphics pipeline with shaders, depth test, and backface culling.
-  11. Load `assets/textures/crate.png` with `stbi_load()`, stage to `VkImage`, create `VkSampler`.
-  12. Create Vertex Buffer and Index Buffer for the 3D cube.
-  13. Create Uniform Buffers and Descriptor Pool/Sets.
-  14. Create command pool, allocate command buffers, and create sync objects (`VkSemaphore`, `VkFence`).
-- **Render Loop**:
-  1. Poll GLFW events. Handle minimization.
-  2. Wait for fence, acquire next swapchain image index (handle out-of-date).
-  3. Update UBO with rotating model matrix (`glfwGetTime()`), view, and perspective projection.
-  4. Record command buffer: begin render pass, bind pipeline, bind vertex/index buffers, bind descriptor set, `vkCmdDrawIndexed`, end render pass.
-  5. Submit command buffer and present image to swapchain.
-- **Teardown**:
-  1. `vkDeviceWaitIdle(device.device)`.
-  2. Destroy framebuffers, render pass, pipeline, layout, descriptor pool, buffers, texture image/sampler, depth image.
-  3. Destroy swapchain image views and swapchain via `vkb_destroy_swapchain()`.
-  4. Destroy logical device via `vkb_destroy_device()`.
-  5. Destroy surface via `vkDestroySurfaceKHR()`.
-  6. Destroy instance via `vkb_destroy_instance()`.
-  7. Destroy GLFW window and terminate GLFW.
-
-### File Structure Changes
-- **Removed**:
-  - `library.c`
-  - `library.h`
-- **Added / Modified**:
-  - `CMakeLists.txt` (updated with FetchContent for GLFW, STB, examples configuration)
-  - `examples/textured_cube.c` (main application code)
-  - `examples/math3d.h` (C17 3D matrix math library)
-  - `examples/stb_image.h` (or STB FetchContent include)
-  - `examples/shaders/cube.vert` & `examples/shaders/cube.frag` (GLSL sources)
-  - `examples/shaders/cube_vert_spv.h` & `examples/shaders/cube_frag_spv.h` (embedded SPIR-V bytecode headers)
-  - `docs/getting_started.md` (updated with sample application build and run section)
-  - `docs/HANDOFF.md` (updated with sample integration status)
 
 ### Risks & Mitigations
-- **Vulkan Coordinate System Differences**:
-  - *Risk*: Vulkan NDC Y-axis is inverted relative to OpenGL, which can cause inverted textures or backface culling issues.
-  - *Mitigation*: Invert `proj.m[1][1]` in `mat4_perspective` and configure counter-clockwise front-face winding (`VK_FRONT_FACE_COUNTER_CLOCKWISE`).
-- **GLFW Availability across Build Profiles**:
-  - *Risk*: Host systems running Clang or MinGW may lack system GLFW development libraries.
-  - *Mitigation*: Use CMake `FetchContent` to compile GLFW directly from source, ensuring 100% build reliability without pre-installed packages.
-- **Missing `glslc` Compiler on Host**:
-  - *Risk*: Building machines may not have Vulkan SDK / `glslc` on their system PATH.
-  - *Mitigation*: Bundle precompiled SPIR-V C header arrays alongside raw GLSL sources, using CMake conditional logic to rebuild with `glslc` only when available.
-
-# Documentation and Porting Guide
-
-### Overview
-This tab specifies the documentation deliverables for the sample application and ongoing codebase maintenance.
-
-### 1. Updated Getting Started Guide (`docs/getting_started.md`)
-The guide will include a dedicated walkthrough of the GLFW sample application:
-- **Building the Sample**: CMake commands for building with Clang and MinGW.
-- **Running the Sample**: Running the `textured_cube` executable and verifying texture rendering.
-- **Key Concepts Highlighted**:
-  - Connecting `vkc-bootstrap` to GLFW window surfaces.
-  - Querying queue family handles.
-  - Handling window resize and swapchain recreation.
-
-### 2. Updated Handoff Tracking (`docs/HANDOFF.md`)
-Records the completion of legacy file elimination, GLFW sample implementation, verified platforms, and instructions for future feature extensions.
+- **Risk**: `info->device.physical_device.instance` might be `VK_NULL_HANDLE` if a user manually constructs `VkbDevice` without setting `instance`.
+- **Mitigation**: Allow explicit override in `VkbSwapchainCreateInfo.instance` and validate `instance != VK_NULL_HANDLE`, returning `VKB_ERROR_INVALID_ARGUMENT` if neither is provided.
 
 # Testing
 
 ### Validation Approach
-Verification is performed across both Clang and MinGW compilers to ensure clean builds, strict C17 standard compliance, and correct Vulkan rendering.
+Verify that `vkc_bootstrap` static library and `textured_cube` application compile and link without errors, and that swapchain creation resolves all surface extension pointers using the active `VkInstance`.
 
 ### Key Scenarios
 1. **Compilation Validation**:
-   - Build static library `vkc_bootstrap` and executable `textured_cube` on Clang.
-   - Build static library `vkc_bootstrap` and executable `textured_cube` on MinGW.
-   - Validate with `-Wall -Wextra -Wpedantic -std=c17`.
-2. **Window & Surface Creation**:
-   - Verify GLFW window initializes and `glfwCreateWindowSurface` generates a valid `VkSurfaceKHR`.
-3. **Texture Loading & Vulkan Upload**:
-   - Verify `stbi_load` successfully reads `assets/textures/crate.png` (512x512 or specified dimensions, 4 channels).
-   - Verify staging buffer allocation, copy command recording, and layout transitions succeed without validation errors.
-4. **Rendering & Depth Occlusion**:
-   - Verify the 3D cube rotates smoothly along X and Y axes.
-   - Verify depth testing correctly occludes back faces.
-   - Verify texture mapping aligns cleanly on all 6 cube faces.
-5. **Window Resize Handling**:
-   - Verify dragging the window edge recreates the swapchain and updates perspective aspect ratio without flickering or crashing.
-   - Verify minimizing the window pauses rendering safely.
-6. **Clean Shutdown**:
-   - Verify closing the window exits cleanly with zero Vulkan validation layer warnings or memory leaks.
+   - Recompile `vkc_bootstrap` and `textured_cube` with Clang and GCC using `-std=c17 -Wall -Wextra -Wpedantic`.
+2. **Swapchain Creation Resolution**:
+   - Verify that `pfn_get_surface_caps`, `pfn_get_surface_formats`, and `pfn_get_surface_present_modes` return valid non-NULL function pointers from `vkGetInstanceProcAddr(instance, ...)`.
+   - Verify that `vkb_create_swapchain` returns `VKB_SUCCESS` and populates `out_swapchain` with valid extent, formats, and image count.
+3. **Swapchain Recreation on Resize**:
+   - Verify `vkb_recreate_swapchain` successfully queries capabilities on window resize and recreates the swapchain with the new dimensions.
 
 # Delivery Steps
 
-### ✓ Step 1: Remove legacy library stubs and configure CMake for example application
-Legacy `library.c` and `library.h` files are removed, and `CMakeLists.txt` is updated with FetchContent for GLFW and example build targets.
+### ✓ Step 1: Propagate VkInstance handle in core structs and fix proc address loading
+Update `VkbPhysicalDevice`, `VkbSwapchainCreateInfo`, and `VkbSwapchain` in `vkc_bootstrap.h` and fix `vkGetInstanceProcAddr` calls in `vkc_bootstrap.c`.
 
-- Delete obsolete `library.c` and `library.h` files from the project.
-- Update `CMakeLists.txt` with `VKC_BOOTSTRAP_BUILD_EXAMPLES` option (default ON).
-- Add FetchContent for GLFW (v3.4) and STB repository (for `stb_image.h`).
-- Configure shader compilation target with fallback to embedded SPIR-V byte arrays, and define executable target `textured_cube`.
+- Add `VkInstance instance;` field to `VkbPhysicalDevice`, `VkbSwapchainCreateInfo`, and `VkbSwapchain` in `vkc_bootstrap.h`.
+- In `vkc_bootstrap.c`, update `vkb_evaluate_physical_device` to store `out_candidate->physical_device.instance = info->instance`.
+- In `vkc_bootstrap.c`, update `vkb_default_swapchain_info` to assign `info.instance = device.physical_device.instance`.
+- In `vkc_bootstrap.c`, update `vkb_create_swapchain` to resolve `vkGetPhysicalDeviceSurfaceCapabilitiesKHR`, `vkGetPhysicalDeviceSurfaceFormatsKHR`, and `vkGetPhysicalDeviceSurfacePresentModesKHR` using the valid `instance` handle.
 
-### ✓ Step 2: Implement 3D math, vertex geometry, and texture loading subsystem
-3D cube geometry, matrix math helpers, and texture loading routines are implemented in C17.
+### ✓ Step 2: Validate build and verify swapchain creation in example application
+Build the project using CMake across Clang and GCC profiles and verify that the example application builds and runs without swapchain errors.
 
-- Create `examples/math3d.h` providing 4x4 matrix math (perspective projection with Vulkan Y-flip, camera look-at, translation, rotation, and matrix multiplication) in C17.
-- Define 3D cube vertex structure `Vertex3D` (position, normal, UV coordinates) with 24 vertices and 36 indices for a complete unit cube.
-- Implement texture loading function using `stb_image` to decode `assets/textures/crate.png` into RGBA8 pixel memory.
-- Implement Vulkan buffer and image upload helpers: staging buffer allocation, device-local image allocation, image layout transition to `VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL`, and `VkSampler` creation.
-
-### ✓ Step 3: Implement complete Vulkan rendering pipeline and GLFW main loop
-A fully functional GLFW sample application rendering a rotating textured 3D cube with depth testing and swapchain recreation is created.
-
-- Create `examples/textured_cube.c` initializing GLFW window and creating Vulkan window surface.
-- Initialize Vulkan subsystem using `vkc-bootstrap`: create instance with debug messenger, select physical device with anisotropy requirement, create logical device with graphics/present queues, and create swapchain with image views.
-- Create depth buffer image, memory allocation, and depth image view for 3D occlusion testing.
-- Create render pass with color and depth attachments, and framebuffers matching swapchain extent.
-- Create descriptor pool, descriptor set layout, and descriptor set binding uniform buffer (MVP) and combined image sampler for `crate.png`.
-- Build graphics pipeline with vertex and fragment shaders, backface culling, and depth test/write enabled.
-- Implement frame rendering loop with double/triple buffering synchronization (`VkSemaphore`, `VkFence`), rotating MVP calculation, command buffer recording, and presentation.
-- Handle framebuffer resize callback gracefully by recreating swapchain and depth buffer with `vkb_recreate_swapchain()`.
-- Implement clean, reverse-order resource deallocation on exit.
-
-### ✓ Step 4: Update documentation, build guides, and handoff tracking
-Documentation and build guides are updated to describe running and extending the sample application.
-
-- Update `docs/getting_started.md` with instructions on building and running the `textured_cube` sample application.
-- Update `docs/HANDOFF.md` recording the completed milestones, GLFW sample integration, and verified profiles.
+- Run CMake build for `vkc_bootstrap` static library and `textured_cube` executable.
+- Verify that `vkb_create_swapchain` and `vkb_recreate_swapchain` return `VKB_SUCCESS`.
+- Update `docs/HANDOFF.md` to document the bug fix and status.

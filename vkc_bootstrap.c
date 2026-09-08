@@ -556,6 +556,7 @@ static VkbResult vkb_evaluate_physical_device(
     VkbDeviceCandidate* out_candidate) {
     memset(out_candidate, 0, sizeof(*out_candidate));
     out_candidate->physical_device.physical_device = pdev;
+    out_candidate->physical_device.instance = info->instance;
     out_candidate->physical_device.surface = info->surface;
 
     VkPhysicalDeviceProperties props;
@@ -1162,6 +1163,7 @@ VkbSwapchainCreateInfo vkb_default_swapchain_info(
     VkbSwapchainCreateInfo info;
     memset(&info, 0, sizeof(info));
 
+    info.instance = device.physical_device.instance;
     info.device = device;
     info.surface = surface;
     info.desired_width = width;
@@ -1190,6 +1192,11 @@ VkbResult vkb_create_swapchain(
         return VKB_ERROR_INVALID_ARGUMENT;
     }
 
+    VkInstance instance = (info->instance != VK_NULL_HANDLE) ? info->instance : info->device.physical_device.instance;
+    if (instance == VK_NULL_HANDLE) {
+        return VKB_ERROR_INVALID_ARGUMENT;
+    }
+
     memset(out_swapchain, 0, sizeof(*out_swapchain));
 
     VkPhysicalDevice pdev = info->device.physical_device.physical_device;
@@ -1200,11 +1207,11 @@ VkbResult vkb_create_swapchain(
 
     /* Dynamically load instance/device surface & swapchain function pointers */
     PFN_vkGetPhysicalDeviceSurfaceCapabilitiesKHR pfn_get_surface_caps =
-        (PFN_vkGetPhysicalDeviceSurfaceCapabilitiesKHR)vkGetInstanceProcAddr(VK_NULL_HANDLE, "vkGetPhysicalDeviceSurfaceCapabilitiesKHR");
+        (PFN_vkGetPhysicalDeviceSurfaceCapabilitiesKHR)vkGetInstanceProcAddr(instance, "vkGetPhysicalDeviceSurfaceCapabilitiesKHR");
     PFN_vkGetPhysicalDeviceSurfaceFormatsKHR pfn_get_surface_formats =
-        (PFN_vkGetPhysicalDeviceSurfaceFormatsKHR)vkGetInstanceProcAddr(VK_NULL_HANDLE, "vkGetPhysicalDeviceSurfaceFormatsKHR");
+        (PFN_vkGetPhysicalDeviceSurfaceFormatsKHR)vkGetInstanceProcAddr(instance, "vkGetPhysicalDeviceSurfaceFormatsKHR");
     PFN_vkGetPhysicalDeviceSurfacePresentModesKHR pfn_get_surface_present_modes =
-        (PFN_vkGetPhysicalDeviceSurfacePresentModesKHR)vkGetInstanceProcAddr(VK_NULL_HANDLE, "vkGetPhysicalDeviceSurfacePresentModesKHR");
+        (PFN_vkGetPhysicalDeviceSurfacePresentModesKHR)vkGetInstanceProcAddr(instance, "vkGetPhysicalDeviceSurfacePresentModesKHR");
 
     PFN_vkCreateSwapchainKHR pfn_create_swapchain_khr =
         (PFN_vkCreateSwapchainKHR)vkGetDeviceProcAddr(dev, "vkCreateSwapchainKHR");
@@ -1379,6 +1386,7 @@ VkbResult vkb_create_swapchain(
 
     out_swapchain->swapchain = swapchain;
     out_swapchain->device = dev;
+    out_swapchain->instance = instance;
     out_swapchain->image_format = selected_format.format;
     out_swapchain->color_space = selected_format.colorSpace;
     out_swapchain->extent = extent;

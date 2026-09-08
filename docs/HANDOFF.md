@@ -46,6 +46,7 @@ The complete C17 rewrite of the `vk-bootstrap` library (`vkc-bootstrap`) has bee
 8. **Swapchain Creation, Recreation & Image Views**:
    - Implemented `vkb_default_swapchain_info()`, `vkb_create_swapchain()`, `vkb_recreate_swapchain()`, and `vkb_destroy_swapchain()`.
    - Added automatic extent clamping against `minImageExtent`/`maxImageExtent`, surface format matching, and FIFO fallback present mode.
+   - Fixed instance-level function pointer resolution for `vkGetPhysicalDeviceSurfaceCapabilitiesKHR`, `vkGetPhysicalDeviceSurfaceFormatsKHR`, and `vkGetPhysicalDeviceSurfacePresentModesKHR` by retaining `VkInstance` in `VkbPhysicalDevice`, `VkbDevice`, and `VkbSwapchainCreateInfo`.
    - Implemented `vkb_swapchain_get_images()`, `vkb_swapchain_get_image_views()`, and `vkb_swapchain_destroy_image_views()`.
 
 9. **Documentation & Porting Guide**:
