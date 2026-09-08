@@ -1,0 +1,6 @@
+#ifndef VKC_BOOTSTRAP_LIBRARY_H
+#define VKC_BOOTSTRAP_LIBRARY_H
+
+void hello(void);
+
+#endif // VKC_BOOTSTRAP_LIBRARY_H
