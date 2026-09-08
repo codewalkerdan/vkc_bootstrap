@@ -2,5 +2,11 @@
 <project version="4">
   <component name="VcsDirectoryMappings">
     <mapping directory="$PROJECT_DIR$" vcs="Git" />
+    <mapping directory="$PROJECT_DIR$/build-gcc/_deps/glfw-src" vcs="Git" />
+    <mapping directory="$PROJECT_DIR$/build-gcc/_deps/stb-src" vcs="Git" />
+    <mapping directory="$PROJECT_DIR$/build-gcc/_deps/vulkanheaders-src" vcs="Git" />
+    <mapping directory="$PROJECT_DIR$/build-test/_deps/glfw-src" vcs="Git" />
+    <mapping directory="$PROJECT_DIR$/build-test/_deps/stb-src" vcs="Git" />
+    <mapping directory="$PROJECT_DIR$/build-test/_deps/vulkanheaders-src" vcs="Git" />
   </component>
 </project>

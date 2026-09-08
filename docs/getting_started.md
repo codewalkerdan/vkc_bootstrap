@@ -202,3 +202,33 @@ VkbInstanceCreateInfo info = vkb_default_instance_info();
 info.app_name = "Custom App";
 info.enable_validation_layers = false;
 ```
+
+---
+
+## 4. Running the GLFW Sample Application (`textured_cube`)
+
+`vkc-bootstrap` includes a complete, high-utility sample application in `examples/textured_cube.c` demonstrating practical end-to-end rendering in pure C17.
+
+### What the Sample Demonstrates
+1. **GLFW & Vulkan Surface Integration**: Creating a GLFW window (`GLFW_NO_API`) and creating a `VkSurfaceKHR` handle.
+2. **End-to-End `vkc-bootstrap` Setup**: Initializing `VkbInstance`, selecting the optimal physical device (`VkbPhysicalDevice`) with queue queries, creating `VkbDevice`, and configuring `VkbSwapchain` with image views.
+3. **Texture Loading & GPU Staging**: Decoding `assets/textures/crate.png` into RGBA8 pixel memory via `stb_image`, uploading via staging buffer, and transitioning layout to `VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL`.
+4. **3D Matrix Math & Uniform Buffers**: Using `examples/math3d.h` for perspective projection (with Vulkan clip space correction), camera look-at, and rotating model transformation updated per frame.
+5. **Depth Buffering**: Creating a device-local depth buffer (`VK_FORMAT_D32_SFLOAT` / `VK_FORMAT_D24_UNORM_S8_UINT`) to ensure correct 3D face occlusion.
+6. **Dynamic Window Resizing**: Automatically catching framebuffer resize events and recreating swapchain and depth resources using `vkb_recreate_swapchain()`.
+7. **Clean Teardown**: Releasing all handles, memory, and sync objects in strict reverse creation order.
+
+### Building and Running
+
+Configure and build with CMake (enabled by default via `VKC_BOOTSTRAP_BUILD_EXAMPLES=ON`):
+
+```bash
+# Configure build
+cmake -B build -S .
+
+# Build library and sample executable
+cmake --build build
+
+# Run the textured cube sample
+./build/textured_cube
+```
