@@ -161,11 +161,6 @@ cmake --build build-mingw
 
 ---
 
-## 👤 Author
-
-- **Daniel Mosquera**
-
----
 
 ## 📄 License
 
