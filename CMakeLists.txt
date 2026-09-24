@@ -250,4 +250,12 @@ if (VKC_BOOTSTRAP_BUILD_EXAMPLES)
     if (CMAKE_C_COMPILER_ID MATCHES "Clang|GNU")
         target_compile_options(textured_cube_sdl PRIVATE -Wall -Wextra -Wpedantic)
     endif()
+
+    if(WIN32)
+        add_custom_command(TARGET textured_cube_sdl POST_BUILD
+                COMMAND ${CMAKE_COMMAND} -E copy_if_different
+                $<TARGET_FILE:SDL3::SDL3>
+                $<TARGET_FILE_DIR:textured_cube_sdl>
+        )
+    endif()
 endif()
