@@ -16,7 +16,77 @@ FetchContent_Declare(
 )
 FetchContent_MakeAvailable(VulkanHeaders)
 
+# Attempt to locate Vulkan SDK
 find_package(Vulkan QUIET)
+
+# Ensure Vulkan::Vulkan target is defined across all platforms and toolchains
+if (NOT TARGET Vulkan::Vulkan)
+    add_library(Vulkan::Vulkan INTERFACE IMPORTED)
+
+    if (TARGET Vulkan-Headers)
+        target_link_libraries(Vulkan::Vulkan INTERFACE Vulkan-Headers)
+    elseif (TARGET Vulkan::Headers)
+        target_link_libraries(Vulkan::Vulkan INTERFACE Vulkan::Headers)
+    elseif (vulkanheaders_SOURCE_DIR)
+        target_include_directories(Vulkan::Vulkan INTERFACE "${vulkanheaders_SOURCE_DIR}/include")
+    endif()
+
+    if (WIN32 OR MINGW)
+        find_library(Vulkan_LIBRARY NAMES vulkan-1 vulkan)
+        if (Vulkan_LIBRARY)
+            target_link_libraries(Vulkan::Vulkan INTERFACE "${Vulkan_LIBRARY}")
+        else()
+            # Generate import library from vulkan-1.def via dlltool / llvm-dlltool
+            find_program(DLLTOOL_EXECUTABLE NAMES
+                "${CMAKE_DLLTOOL}"
+                llvm-dlltool
+                x86_64-w64-mingw32-dlltool
+                dlltool
+            )
+            set(VULKAN_DEF_FILE "${CMAKE_CURRENT_SOURCE_DIR}/cmake/vulkan-1.def")
+            set(VULKAN_IMPORT_LIB "${CMAKE_CURRENT_BINARY_DIR}/libvulkan-1.a")
+
+            if (DLLTOOL_EXECUTABLE AND EXISTS "${VULKAN_DEF_FILE}")
+                set(DLLTOOL_MACHINE "i386:x86-64")
+                if (CMAKE_SYSTEM_PROCESSOR MATCHES "i.86|x86|X86" AND NOT CMAKE_SYSTEM_PROCESSOR MATCHES "64")
+                    set(DLLTOOL_MACHINE "i386")
+                elseif (CMAKE_SYSTEM_PROCESSOR MATCHES "arm64|aarch64|ARM64|AARCH64")
+                    set(DLLTOOL_MACHINE "arm64")
+                elseif (CMAKE_SYSTEM_PROCESSOR MATCHES "arm")
+                    set(DLLTOOL_MACHINE "arm")
+                endif()
+
+                execute_process(
+                    COMMAND "${DLLTOOL_EXECUTABLE}" -m "${DLLTOOL_MACHINE}" -d "${VULKAN_DEF_FILE}" -l "${VULKAN_IMPORT_LIB}"
+                    RESULT_VARIABLE DLLTOOL_RES
+                    OUTPUT_QUIET
+                    ERROR_QUIET
+                )
+                if (DLLTOOL_RES EQUAL 0 AND EXISTS "${VULKAN_IMPORT_LIB}")
+                    target_link_libraries(Vulkan::Vulkan INTERFACE "${VULKAN_IMPORT_LIB}")
+                else()
+                    target_link_libraries(Vulkan::Vulkan INTERFACE -lvulkan-1)
+                endif()
+            else()
+                target_link_libraries(Vulkan::Vulkan INTERFACE -lvulkan-1)
+            endif()
+        endif()
+    elseif (UNIX AND NOT APPLE)
+        find_library(Vulkan_LIBRARY NAMES vulkan
+            PATHS /usr/lib64 /usr/lib /usr/local/lib /usr/lib/x86_64-linux-gnu /usr/lib/aarch64-linux-gnu
+        )
+        if (Vulkan_LIBRARY)
+            target_link_libraries(Vulkan::Vulkan INTERFACE "${Vulkan_LIBRARY}")
+        else()
+            target_link_libraries(Vulkan::Vulkan INTERFACE -lvulkan)
+        endif()
+    elseif (APPLE)
+        find_library(Vulkan_LIBRARY NAMES vulkan MoltenVK)
+        if (Vulkan_LIBRARY)
+            target_link_libraries(Vulkan::Vulkan INTERFACE "${Vulkan_LIBRARY}")
+        endif()
+    endif()
+endif()
 
 add_library(vkc_bootstrap STATIC
     vkc_bootstrap.c
@@ -34,8 +104,8 @@ elseif (TARGET Vulkan::Headers)
     target_link_libraries(vkc_bootstrap PUBLIC Vulkan::Headers)
 endif()
 
-if (Vulkan_FOUND AND TARGET Vulkan::Vulkan)
-    target_link_libraries(vkc_bootstrap PRIVATE Vulkan::Vulkan)
+if (TARGET Vulkan::Vulkan)
+    target_link_libraries(vkc_bootstrap PUBLIC Vulkan::Vulkan)
 endif()
 
 if (CMAKE_C_COMPILER_ID MATCHES "Clang|GNU")
@@ -64,9 +134,10 @@ if (VKC_BOOTSTRAP_BUILD_EXAMPLES)
     FetchContent_Declare(
         SDL3
         GIT_REPOSITORY https://github.com/libsdl-org/SDL.git
-        GIT_TAG release-3.2.0
+        GIT_TAG release-3.2.16
         GIT_SHALLOW TRUE
     )
+    set(SDL_SHARED ON  CACHE BOOL "" FORCE)
     set(SDL_TESTS OFF CACHE BOOL "" FORCE)
     set(SDL_EXAMPLES OFF CACHE BOOL "" FORCE)
     set(SDL_INSTALL OFF CACHE BOOL "" FORCE)
@@ -136,7 +207,7 @@ if (VKC_BOOTSTRAP_BUILD_EXAMPLES)
         glfw
     )
 
-    if (Vulkan_FOUND AND TARGET Vulkan::Vulkan)
+    if (TARGET Vulkan::Vulkan)
         target_link_libraries(textured_cube PRIVATE Vulkan::Vulkan)
     endif()
 
@@ -168,7 +239,7 @@ if (VKC_BOOTSTRAP_BUILD_EXAMPLES)
         SDL3::SDL3
     )
 
-    if (Vulkan_FOUND AND TARGET Vulkan::Vulkan)
+    if (TARGET Vulkan::Vulkan)
         target_link_libraries(textured_cube_sdl PRIVATE Vulkan::Vulkan)
     endif()
 
