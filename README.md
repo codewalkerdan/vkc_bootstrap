@@ -126,7 +126,7 @@ int main(void) {
 
 ## 🛠️ Building & Examples
 
-`vkc-bootstrap` includes a complete, interactive 3D textured cube GLFW sample (`examples/textured_cube.c`) rendering a rotating cube with dynamic resize handling, depth buffering, and texture mapping (`assets/textures/crate.png`).
+`vkc-bootstrap` includes two complete, interactive 3D textured cube samples: `examples/textured_cube.c` uses GLFW and `examples/textured_cube_sdl.c` uses SDL3. Both render a rotating cube with dynamic resize handling, depth buffering, and texture mapping (`assets/textures/crate.png`). SDL3 is fetched only when `VKC_BOOTSTRAP_BUILD_EXAMPLES=ON`.
 
 ### Building with Clang
 ```bash
@@ -146,9 +146,10 @@ cmake -B build-mingw -S . -DCMAKE_C_COMPILER=x86_64-w64-mingw32-gcc -DVKC_BOOTST
 cmake --build build-mingw
 ```
 
-### Running the Example Application
+### Running the Example Applications
 ```bash
-./build-clang/examples/textured_cube
+./build-clang/textured_cube
+./build-clang/textured_cube_sdl
 ```
 
 ---

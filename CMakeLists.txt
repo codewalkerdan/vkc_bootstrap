@@ -60,6 +60,17 @@ if (VKC_BOOTSTRAP_BUILD_EXAMPLES)
     set(GLFW_BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
     set(GLFW_INSTALL OFF CACHE BOOL "" FORCE)
 
+    # Fetch SDL3
+    FetchContent_Declare(
+        SDL3
+        GIT_REPOSITORY https://github.com/libsdl-org/SDL.git
+        GIT_TAG release-3.2.0
+        GIT_SHALLOW TRUE
+    )
+    set(SDL_TESTS OFF CACHE BOOL "" FORCE)
+    set(SDL_EXAMPLES OFF CACHE BOOL "" FORCE)
+    set(SDL_INSTALL OFF CACHE BOOL "" FORCE)
+
     # Automatically adapt windowing backend on Linux if X11 xcursor headers are missing
     if (UNIX AND NOT APPLE)
         find_package(PkgConfig QUIET)
@@ -72,6 +83,7 @@ if (VKC_BOOTSTRAP_BUILD_EXAMPLES)
     endif()
 
     FetchContent_MakeAvailable(glfw)
+    FetchContent_MakeAvailable(SDL3)
 
     # Fetch STB (for stb_image.h)
     FetchContent_Declare(
@@ -134,5 +146,37 @@ if (VKC_BOOTSTRAP_BUILD_EXAMPLES)
 
     if (CMAKE_C_COMPILER_ID MATCHES "Clang|GNU")
         target_compile_options(textured_cube PRIVATE -Wall -Wextra -Wpedantic)
+    endif()
+
+    add_executable(textured_cube_sdl
+        examples/textured_cube_sdl.c
+        examples/math3d.h
+    )
+
+    if (GLSLC_EXECUTABLE)
+        add_dependencies(textured_cube_sdl compile_shaders)
+    endif()
+
+    target_include_directories(textured_cube_sdl PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}
+        ${CMAKE_CURRENT_SOURCE_DIR}/examples
+        ${stb_SOURCE_DIR}
+    )
+
+    target_link_libraries(textured_cube_sdl PRIVATE
+        vkc_bootstrap
+        SDL3::SDL3
+    )
+
+    if (Vulkan_FOUND AND TARGET Vulkan::Vulkan)
+        target_link_libraries(textured_cube_sdl PRIVATE Vulkan::Vulkan)
+    endif()
+
+    if (UNIX AND NOT APPLE)
+        target_link_libraries(textured_cube_sdl PRIVATE m)
+    endif()
+
+    if (CMAKE_C_COMPILER_ID MATCHES "Clang|GNU")
+        target_compile_options(textured_cube_sdl PRIVATE -Wall -Wextra -Wpedantic)
     endif()
 endif()

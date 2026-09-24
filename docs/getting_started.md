@@ -205,9 +205,11 @@ info.enable_validation_layers = false;
 
 ---
 
-## 4. Running the GLFW Sample Application (`textured_cube`)
+## 4. Running the Textured Cube Samples
 
-`vkc-bootstrap` includes a complete, high-utility sample application in `examples/textured_cube.c` demonstrating practical end-to-end rendering in pure C17.
+`vkc-bootstrap` includes complete, high-utility sample applications in `examples/textured_cube.c` and `examples/textured_cube_sdl.c`, demonstrating practical end-to-end rendering in pure C17.
+
+### GLFW Sample (`textured_cube`)
 
 ### What the Sample Demonstrates
 1. **GLFW & Vulkan Surface Integration**: Creating a GLFW window (`GLFW_NO_API`) and creating a `VkSurfaceKHR` handle.
@@ -226,9 +228,23 @@ Configure and build with CMake (enabled by default via `VKC_BOOTSTRAP_BUILD_EXAM
 # Configure build
 cmake -B build -S .
 
-# Build library and sample executable
+# Build the library and both sample executables
 cmake --build build
 
-# Run the textured cube sample
+# Run the GLFW textured cube sample
 ./build/textured_cube
+
+# Run the SDL3 textured cube sample
+./build/textured_cube_sdl
 ```
+
+### SDL3 Sample (`textured_cube_sdl`)
+
+The SDL3 variant keeps the same Vulkan rendering and resource setup while replacing the window-system boundary with SDL3:
+
+1. SDL3 creates a resizable Vulkan-capable window and reports initialization or window errors through `SDL_GetError()`.
+2. `SDL_Vulkan_GetInstanceExtensions()` supplies the platform-specific instance extensions before `vkb_create_instance()` runs.
+3. `SDL_Vulkan_CreateSurface()` creates the `VkSurfaceKHR` used for physical-device and presentation-queue selection.
+4. SDL window pixel-size events trigger swapchain recreation, while quit events end the render loop.
+
+SDL3 is fetched and built automatically by CMake when examples are enabled. The GLFW sample remains available as `textured_cube`, and the SDL3 sample is available as `textured_cube_sdl`.
